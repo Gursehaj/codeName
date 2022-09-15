@@ -1,0 +1,7 @@
+python==3.10
+tensorflow==2.3.1
+uvicorn==0.12.2
+fastapi==0.63.0
+matplotlib
+opencv-python
+imutils
