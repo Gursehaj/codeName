@@ -1,0 +1,27 @@
+from kivymd.app import MDApp
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.button import MDRaisedButton
+from kivy.uix.image import Image
+from kivy.graphics.texture import Texture
+from kivy.clock import Clock
+from imutils.video import FPS
+import cv2
+
+class DemoCapture(MDApp):
+    def build(self):
+        layout = MDBoxLayout(orientation= 'vertical')
+        self.image = Image()
+        layout.add_widget(self.image)
+        self.capture = cv2.VideoCapture('../backgroundVideos/2.mp4')
+        Clock.schedule_interval(self.load_frame, 1.0/1.0)
+        return layout
+    def load_frame(self, *args):
+        ret, frame = self.capture.read()
+        self.image_frame = frame
+        buffer = cv2.flip(frame,0).tostring()
+        texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
+        texture.blit_buffer(buffer, colorfmt='bgr', bufferfmt='ubyte')
+        self.image.texture = texture
+
+if __name__ == '__main__':
+    DemoCapture().run()
