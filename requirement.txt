@@ -5,3 +5,5 @@ fastapi==0.63.0
 matplotlib
 opencv-python
 imutils
+kivy
+kivymd
