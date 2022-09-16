@@ -7,21 +7,28 @@ from kivy.clock import Clock
 from imutils.video import FPS
 import cv2
 
+# if we want to make it full screen 
+from kivy.core.window import Window
+# Window.fullscreen = 'auto'
+# Window.borderless = True
+
 class DemoCapture(MDApp):
     def build(self):
+        #  Window.fullscreen = 'auto'
         layout = MDBoxLayout(orientation= 'vertical')
         self.image = Image()
         layout.add_widget(self.image)
         self.capture = cv2.VideoCapture('../backgroundVideos/2.mp4')
-        Clock.schedule_interval(self.load_frame, 1.0/1.0)
+        Clock.schedule_interval(self.load_frame, 1.0/30.0)
         return layout
     def load_frame(self, *args):
         ret, frame = self.capture.read()
         self.image_frame = frame
-        buffer = cv2.flip(frame,0).tostring()
+        buffer = cv2.flip(frame,0).tobytes()
         texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
         texture.blit_buffer(buffer, colorfmt='bgr', bufferfmt='ubyte')
         self.image.texture = texture
 
-if __name__ == '__main__':
-    DemoCapture().run()
+def runVideoPlayer():
+    d = DemoCapture()
+    d.run()
