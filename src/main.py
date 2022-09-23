@@ -1,6 +1,6 @@
 from multiprocessing import Queue
-from subprocess import CREATE_NEW_CONSOLE
-from torch.multiprocessing import Pool, Process, set_start_method
+# from subprocess import CREATE_NEW_CONSOLE
+# from torch.multiprocessing import Pool, Process, set_start_method
 import cv2
 import time
 from multiprocessing import Process
@@ -8,7 +8,7 @@ from multiprocessing import Process
 # import numpy as np
 # import PIL.Image
 # import matplotlib.pyplot as plt
-from utils import *
+# from utils import *
 
 ## section to setup deeplab
 #=============================================
