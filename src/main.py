@@ -1,60 +1,108 @@
-# import time # time library
-# import cv2
-# from player import WebcamStream
+from multiprocessing import Queue
+from subprocess import CREATE_NEW_CONSOLE
+from torch.multiprocessing import Pool, Process, set_start_method
+import cv2
+import time
+from multiprocessing import Process
 
-# # initializing and starting multi-threaded webcam input stream 
-# webcam_stream = WebcamStream("2.mp4") # 0 id for main camera
-# webcam_stream.start()
-# # processing frames in input stream
-# num_frames_processed = 0 
-# start = time.time()
-# while True :
-#     if webcam_stream.stopped is True :
-#         break
-#     else :
-#         _, frame = webcam_stream.read()
-#     # adding a delay for simulating video processing time 
-#     # delay = 0.03 # delay value in seconds
-#     # time.sleep(delay) 
-#     if _:
-#         num_frames_processed += 1
-#         # displaying frame 
-#         cv2.imshow('frame' , frame)
-#         key = cv2.waitKey(1)
-#         if key == ord('q'):
-#             break
-# end = time.time()
-# webcam_stream.stop() # stop the webcam stream
+# import numpy as np
+# import PIL.Image
+# import matplotlib.pyplot as plt
+from utils import *
 
-# # printing time elapsed and fps 
-# elapsed = end-start
-# fps = num_frames_processed/elapsed 
-# print("FPS: {} , Elapsed Time: {} ".format(fps, elapsed))
-# # closing all windows 
-# cv2.destroyAllWindows()
+## section to setup deeplab
+#=============================================
+# Load the DeepLabv3 model to memory
+# model = utils.load_model()
 
-from concurrent.futures import thread
-from basicVideoPlayer import *
-import threading
+# Define two axes for showing the mask and the true video in realtime
+# And set the ticks to none for both the axes
+# fig, (ax1, ax2) = plt.subplots(1, 2, figsize = (15, 8))
+# ax1.set_title("Background Changed Video")
+# ax2.set_title("Mask")
 
-player = videoplayer()
+# ax1.set_xticks([])
+# ax1.set_yticks([])
+# ax2.set_xticks([])
+# ax2.set_yticks([])
 
-def run():
-    print('hello')
-    videoplayer.playvideo(player)
+# Create two image objects to picture on top of the axes defined above
+# im1 = ax1.imshow(utils.grab_frame(video_session))
+# im2 = ax2.imshow(utils.grab_frame(video_session))
 
-def printing():
-    for i in range(0,10):
-        print('printing')
+# Switch on the interactive mode in matplotlib
+# plt.ion()
+# plt.show()
+#=============================================
+
+# try:
+#      set_start_method('spawn', force=True)
+# except RuntimeError:
+#     pass
+
+
+def instanceSegmentor():
+    capture = cv2.VideoCapture(0)
+    capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+
+    # FPS = 1/X, X = desired FPS
+    FPS = 1/120
+    FPS_MS = int(FPS * 1000) #in milli seconds (use if required)
+
+    while True:
+        # Ensure camera is connected
+        if capture.isOpened():
+            (status, frame) = capture.read()
+            
+            # Ensure valid frame
+            if status:
+                # Using cv2.flip() method
+                # Use Flip code 0 to flip vertically
+                frame = cv2.flip(frame, 1)
+                cv2.imshow('frame', frame)
+            else:
+                break
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            time.sleep(FPS)
+
+    capture.release()
+    cv2.destroyAllWindows()
+
+def runVideos(video,name):
+    cap = cv2.VideoCapture(video)
+    cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
+
+    # FPS = 1/X, X = desired FPS
+    FPS = 1/120
+    FPS_MS = int(FPS * 1000)
+    while True:
+        if cap.isOpened():
+            ret, img = cap.read()
+            if ret:    
+                cv2.imshow(name, img)
+            else:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            time.sleep(FPS)
+
+    cap.release()
+
 if __name__ == '__main__':
-    # Create two threads as follows
-    try:
-        threads = list()
-        videoplayer.init(player)
-        x = threading.Thread(target=run(), daemon=True)
-        threads.append(x)
-        y = threading.Thread(target=printing(), daemon=True)
-        threads.append(y)
-        y.start()
-        print('hiiii')
-    except Exception as e: print(e)
+
+    # try:
+    #     set_start_method('spawn', force=True)
+    # except RuntimeError:
+    #     pass
+
+    #Setting up shared memory (Queue) for processes to shared background frame
+    backgroundImageQueue = Queue()
+
+    videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4']
+
+    backgroundProcess = Process(target=runVideos, args=(videos[1], str(videos[1])))
+    backgroundProcess.start()
+
+    detectionProcess = Process(target=instanceSegmentor, args=())
+    detectionProcess.start() 
