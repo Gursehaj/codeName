@@ -2,6 +2,7 @@ from tkinter import Frame
 import cv2
 import torch
 import torchvision
+import numpy as np
 # from torchvision.models import resnet50, ResNet50_Weights
 
 torch.backends.cudnn.enabled = True
@@ -14,7 +15,7 @@ class utils:
     def load_model():
         # Load the DeepLab v3 model to system
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_resnet50', pretrained=True)
+        model = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_resnet101', pretrained=True)
         print("Prediction happening on: " + device)
         ## try to switch to new verison for better prediction
         # model = torch.hub.load("pytorch/vision", "resnet50", weights="IMAGENET1K_V2")
@@ -58,7 +59,10 @@ class utils:
         # Make the predictions for labels across the image
         with torch.no_grad():
             output = model(input_tensor)["out"][0]
+            # output = torch.sigmoid(output)
+            # output = output > 0.9
             output = output.argmax(0)
+
         
         # Return the predictions
         return output.cpu().numpy()
