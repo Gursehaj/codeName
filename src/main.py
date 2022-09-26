@@ -3,51 +3,29 @@ from multiprocessing import Queue
 # from torch.multiprocessing import Pool, Process, set_start_method
 import cv2
 import time
-from multiprocessing import Process
+from multiprocessing import Process, Pipe
 
-# import numpy as np
+import numpy as np
+# from PIL import Image as im
+
 # import PIL.Image
-# import matplotlib.pyplot as plt
-# from utils import *
-
-## section to setup deeplab
-#=============================================
-# Load the DeepLabv3 model to memory
-# model = utils.load_model()
-
-# Define two axes for showing the mask and the true video in realtime
-# And set the ticks to none for both the axes
-# fig, (ax1, ax2) = plt.subplots(1, 2, figsize = (15, 8))
-# ax1.set_title("Background Changed Video")
-# ax2.set_title("Mask")
-
-# ax1.set_xticks([])
-# ax1.set_yticks([])
-# ax2.set_xticks([])
-# ax2.set_yticks([])
-
-# Create two image objects to picture on top of the axes defined above
-# im1 = ax1.imshow(utils.grab_frame(video_session))
-# im2 = ax2.imshow(utils.grab_frame(video_session))
-
-# Switch on the interactive mode in matplotlib
-# plt.ion()
-# plt.show()
-#=============================================
-
-# try:
-#      set_start_method('spawn', force=True)
-# except RuntimeError:
-#     pass
-
+import matplotlib.pyplot as plt
+from utils import *
 
 def instanceSegmentor():
+    # Load the DeepLabv3 model to memory
+    model = utils.load_model()
     capture = cv2.VideoCapture(0)
     capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+    cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
+    cv2.namedWindow("raw", cv2.WINDOW_AUTOSIZE)
 
+    print("Waiting for camera to load")
+    time.sleep(2)
+    
     # FPS = 1/X, X = desired FPS
-    FPS = 1/120
-    FPS_MS = int(FPS * 1000) #in milli seconds (use if required)
+    # FPS = 1/120
+    # FPS_MS = int(FPS * 1000) #in milli seconds (use if required)
 
     while True:
         # Ensure camera is connected
@@ -59,13 +37,23 @@ def instanceSegmentor():
                 # Using cv2.flip() method
                 # Use Flip code 0 to flip vertically
                 frame = cv2.flip(frame, 1)
-                cv2.imshow('frame', frame)
+                width, height, channels = frame.shape
+                labels = utils.get_pred(frame, model)
+                mask = labels == 15
+                # The PASCAL VOC dataset has 20 categories of which Person is the 16th category
+                # Hence wherever person is predicted, the label returned will be 15
+                # Subsequently repeat the mask across RGB channels 
+                mask = np.repeat(mask[:, :, np.newaxis], 3, axis = 2)
+                cv2.imshow("raw", frame)
+                cv2.imshow("mask", mask * 1.0)
             else:
                 break
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-            time.sleep(FPS)
-
+            # time.sleep(FPS)
+    
+    # Empty the cache and switch off the interactive mode
+    torch.cuda.empty_cache()
     capture.release()
     cv2.destroyAllWindows()
 
@@ -91,18 +79,15 @@ def runVideos(video,name):
 
 if __name__ == '__main__':
 
-    # try:
-    #     set_start_method('spawn', force=True)
-    # except RuntimeError:
-    #     pass
-
     #Setting up shared memory (Queue) for processes to shared background frame
     backgroundImageQueue = Queue()
 
     videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4']
 
+    detectionProcess = Process(target=instanceSegmentor, args=())
+    detectionProcess.start() 
+
     backgroundProcess = Process(target=runVideos, args=(videos[1], str(videos[1])))
     backgroundProcess.start()
 
-    detectionProcess = Process(target=instanceSegmentor, args=())
-    detectionProcess.start() 
+
