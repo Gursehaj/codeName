@@ -1,4 +1,5 @@
 from multiprocessing import Queue
+from queue import Empty
 # from subprocess import CREATE_NEW_CONSOLE
 # from torch.multiprocessing import Pool, Process, set_start_method
 import cv2
@@ -12,16 +13,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 from utils import *
 
-def instanceSegmentor(sender):
+ogDim = (1280, 720)
+predDim = (640, 360)
+
+def instanceSegmentor(queue):
+    global ogDim
+    global predDim
     # Load the DeepLabv3 model to memory
     model = utils.load_model()
-    capture = cv2.VideoCapture(0)
+    print("Waiting for camera to load")
+    capture = cv2.VideoCapture(0) 
+    print("Camera loaded!")
+    print("Setting camera properties")
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, ogDim[1])
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, ogDim[0])
     capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
-    cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
-    cv2.namedWindow("raw", cv2.WINDOW_AUTOSIZE)
+    print("Properties Set! Starting Webcam!")
+
+    # cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
+    # cv2.namedWindow("raw", cv2.WINDOW_AUTOSIZE)
     cv2.namedWindow("cutout", cv2.WINDOW_AUTOSIZE)
 
-    print("Waiting for camera to load")
     # time.sleep(2)
     
     # FPS = 1/X, X = desired FPS
@@ -37,32 +49,38 @@ def instanceSegmentor(sender):
             if status:
                 # Using cv2.flip() method
                 # Use Flip code 0 to flip vertically
-                
                 frame = cv2.flip(frame, 1)
-                width, height, channels = frame.shape
-                frame1 = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                labels = utils.get_pred(frame1, model)
+                ogFrame = frame.copy()
+
+                # width, height, channels = frame.shape
+
+                # frame = cv2.cvtColor(cv2.resize(frame, (640,360), interpolation=cv2.INTER_NEAREST), cv2.COLOR_BGR2RGB)
+                labels = utils.get_pred(cv2.resize(frame, (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST), model)
+                
                 mask = labels == 15
                 # The PASCAL VOC dataset has 20 categories of which Person is the 16th category
                 # Hence wherever person is predicted, the label returned will be 15
                 # Subsequently repeat the mask across RGB channels 
-                # print(np.unique(labels))
-                # print(labels.shape)
-                # print(labels.dtype)
-                # print(mask.shape)
+
                 mask = mask.astype(np.uint8)
                 
                 mask[mask!=1] = 0
                 mask[mask==1] = 255
                 # print(np.unique(labels))
-                n_frame = frame.copy()
+
+                try:
+                    queue.put_nowait(mask)
+                    # print("data Sent!")
+                except:
+                    print("Could not send mask data!")
+
+                n_frame = cv2.resize(frame.copy(), (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST)
                 n_frame[mask==0] = 0
                 # mask = np.repeat(mask[:, :, np.newaxis], 3, axis = 2)
                 # mask = labels.astype(np.uint8) #* 1.0
-                cv2.imshow("raw", frame)
+                # cv2.imshow("raw", frame)
                 cv2.imshow("cutout", n_frame)
                 # cv2.imshow("mask", mask)
-                sender.send(mask)
             else:
                 break
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -74,7 +92,7 @@ def instanceSegmentor(sender):
     capture.release()
     cv2.destroyAllWindows()
 
-def runVideos(receiver, video,name):
+def runVideos(queue, video, name):
     cap = cv2.VideoCapture(video)
     cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
     cv2.namedWindow("masked", cv2.WINDOW_AUTOSIZE)
@@ -88,8 +106,22 @@ def runVideos(receiver, video,name):
             if ret:    
                 cv2.imshow(name, img)
                 n_frame = img.copy()
-                n_frame[receiver.recv()==0] = 0
-                cv2.imshow("masked", n_frame)
+                # try:
+                if not queue.empty():
+                    
+                    # print("got data!")
+                    cv2.imshow("masked", queue.get_nowait())
+                
+                # except Exception as e:
+                #     print("could not get mask data!\n" + str(e))
+                # mask = cv2.resize(pipeData[0], (1920,1080), interpolation=cv2.INTER_NEAREST)
+                # ogImg = pipeData[1]
+                # print("Background Shape is: " + str(n_frame.shape))
+                # print("Original Frame Shape is: " + str(ogImg.shape))
+                # print("Mask Shape is: " + str(mask.shape)) 
+                # n_frame[mask!=0] = ogImg           
+
+                # cv2.imshow("masked", n_frame)
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -99,18 +131,12 @@ def runVideos(receiver, video,name):
 
 if __name__ == '__main__':
 
-    #Setting up shared memory (Queue) for processes to shared background frame
-    backgroundImageQueue = Queue()
+    q = Queue()
 
-    # create a pipe
-    conn1, conn2 = Pipe()
-    
     videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4']
 
-    detectionProcess = Process(target=instanceSegmentor, args=(conn1,))
+    detectionProcess = Process(target=instanceSegmentor, args=(q,))
     detectionProcess.start() 
 
-    backgroundProcess = Process(target=runVideos, args=(conn2, videos[1], str(videos[1])))
+    backgroundProcess = Process(target=runVideos, args=(q, videos[1], str(videos[1])))
     backgroundProcess.start()
-
-
