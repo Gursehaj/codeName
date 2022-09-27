@@ -19,8 +19,11 @@ predDim = (640, 360)
 def instanceSegmentor(queue):
     global ogDim
     global predDim
+    
     # Load the DeepLabv3 model to memory
     model = utils.load_model()
+    
+    # Load webcam
     print("Waiting for camera to load")
     capture = cv2.VideoCapture(0) 
     print("Camera loaded!")
@@ -53,7 +56,7 @@ def instanceSegmentor(queue):
                 ogFrame = frame.copy()
 
                 # width, height, channels = frame.shape
-
+                # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 # frame = cv2.cvtColor(cv2.resize(frame, (640,360), interpolation=cv2.INTER_NEAREST), cv2.COLOR_BGR2RGB)
                 labels = utils.get_pred(cv2.resize(frame, (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST), model)
                 
@@ -93,6 +96,8 @@ def instanceSegmentor(queue):
     cv2.destroyAllWindows()
 
 def runVideos(queue, video, name):
+    global ogDim
+    global predDim
     cap = cv2.VideoCapture(video)
     cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
     cv2.namedWindow("masked", cv2.WINDOW_AUTOSIZE)
@@ -108,9 +113,9 @@ def runVideos(queue, video, name):
                 n_frame = img.copy()
                 # try:
                 if not queue.empty():
-                    
                     # print("got data!")
                     cv2.imshow("masked", queue.get_nowait())
+                    
                 
                 # except Exception as e:
                 #     print("could not get mask data!\n" + str(e))
