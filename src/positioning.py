@@ -1,6 +1,7 @@
 from inspect import ismethoddescriptor
 import cv2
 import numpy as np
+import skimage.exposure
 
 
 backgroundVideo = cv2.VideoCapture("../backgroundVideos/2.mp4")
@@ -15,7 +16,22 @@ cv2.namedWindow("output", cv2.WINDOW_NORMAL)
 dim = (640, 480)
 camera = cv2.resize(camera, dim)
 mask = cv2. resize(mask, dim)
-cv2.imshow("mask", mask)
+
+# blur threshold image
+blur = cv2.GaussianBlur(mask, (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
+
+# stretch so that 255 -> 255 and 127.5 -> 0
+# C = A*X+B
+# 255 = A*255+B
+# 0 = A*127.5+B
+# Thus A=2 and B=-127.5
+#aa = a*2.0-255.0 does not work correctly, so use skimage
+result = skimage.exposure.rescale_intensity(blur, in_range=(127.5,255), out_range=(0,255))
+
+
+
+
+cv2.imshow("mask", result)
 cv2.imshow("cutout", mask)
 cv2.imshow("camera", camera)
 # print(mask.shape)
@@ -32,7 +48,8 @@ while True:
     if _:
         # cv2.imshow("video",frame)
         cutout = frame.copy()
-        camera[mask<=230] = 0
+        camera[mask<=1] = 0
+        # camera[mask<=230] = 0
         # cutout[mask==0] = 0
 
         # camera = cv2.resize(camera, (w, h))

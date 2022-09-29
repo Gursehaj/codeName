@@ -5,6 +5,7 @@ from queue import Empty
 import cv2
 import time
 from multiprocessing import Process, Pipe
+import skimage.exposure
 
 import numpy as np
 # from PIL import Image as im
@@ -69,6 +70,9 @@ def instanceSegmentor(queue):
                 
                 mask[mask!=1] = 0
                 mask[mask==1] = 255
+                mask = cv2.GaussianBlur(mask, (0,0), sigmaX=4, sigmaY=4, borderType = cv2.BORDER_DEFAULT)
+                mask = skimage.exposure.rescale_intensity(mask, in_range=(127.5,255), out_range=(0,255))
+
                 # print(np.unique(labels))
 
                 try:
@@ -99,7 +103,8 @@ def runVideos(queue, video, name):
     global ogDim
     global predDim
     cap = cv2.VideoCapture(video)
-    cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
+    # cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
+    cv2.namedWindow("blurmasked", cv2.WINDOW_AUTOSIZE)
     cv2.namedWindow("masked", cv2.WINDOW_AUTOSIZE)
 
     # FPS = 1/X, X = desired FPS
@@ -109,13 +114,23 @@ def runVideos(queue, video, name):
         if cap.isOpened():
             ret, img = cap.read()
             if ret:    
-                cv2.imshow(name, img)
+                # cv2.imshow(name, img)
                 n_frame = img.copy()
                 # try:
                 if not queue.empty():
                     # print("got data!")
-                    cv2.imshow("masked", queue.get_nowait())
-                    
+                    mask = queue.get_nowait()
+                    cv2.imshow("masked", mask)
+                    # blur threshold image
+                    blur = cv2.GaussianBlur(mask, (0,0), sigmaX=4, sigmaY=4, borderType = cv2.BORDER_DEFAULT)
+                    # stretch so that 255 -> 255 and 127.5 -> 0
+                    # C = A*X+B
+                    # 255 = A*255+B
+                    # 0 = A*127.5+B
+                    # Thus A=2 and B=-127.5
+                    #aa = a*2.0-255.0 does not work correctly, so use skimage
+                    # result = skimage.exposure.rescale_intensity(blur, in_range=(127.5,255), out_range=(0,255))
+                    cv2.imshow("blurmasked", blur)
                 
                 # except Exception as e:
                 #     print("could not get mask data!\n" + str(e))
