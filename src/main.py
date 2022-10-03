@@ -1,21 +1,42 @@
-from multiprocessing import Queue
-from queue import Empty
+from multiprocessing import Queue, Value, Process
+
 # from subprocess import CREATE_NEW_CONSOLE
 # from torch.multiprocessing import Pool, Process, set_start_method
+
 import cv2
 import time
-from multiprocessing import Process, Pipe
 import skimage.exposure
 
-import numpy as np
-# from PIL import Image as im
+from pynput import keyboard 
 
+import numpy as np
+
+# from PIL import Image as im
 # import PIL.Image
+
 import matplotlib.pyplot as plt
 from utils import *
 
 ogDim = (1280, 720)
 predDim = (640, 360)
+
+vidLen = 0
+
+def on_press(key):
+    try:
+        if (key == key.up):
+            changeBackgroundVideo()
+    except AttributeError:
+        print('special key {0} pressed'.format(
+            key))
+
+def changeBackgroundVideo():
+    global sharedPos
+    global vidLen
+    sharedPos.value += 1
+    if sharedPos.value >= vidLen:
+        sharedPos.value = 0
+    print(sharedPos.value)
 
 def instanceSegmentor(queue):
     global ogDim
@@ -73,8 +94,6 @@ def instanceSegmentor(queue):
                 mask = cv2.GaussianBlur(mask, (0,0), sigmaX=4, sigmaY=4, borderType = cv2.BORDER_DEFAULT)
                 mask = skimage.exposure.rescale_intensity(mask, in_range=(127.5,255), out_range=(0,255))
 
-                # print(np.unique(labels))
-
                 try:
                     queue.put_nowait(mask)
                     # print("data Sent!")
@@ -99,11 +118,15 @@ def instanceSegmentor(queue):
     capture.release()
     cv2.destroyAllWindows()
 
-def runVideos(queue, video, name):
+def runVideos(queue, videos, name, sharedPos):
     global ogDim
     global predDim
-    cap = cv2.VideoCapture(video)
-    # cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
+
+    caps = []
+
+    for i in range(len(videos)):
+        caps.append(cv2.VideoCapture(videos[i]))
+    cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
     cv2.namedWindow("blurmasked", cv2.WINDOW_AUTOSIZE)
     cv2.namedWindow("masked", cv2.WINDOW_AUTOSIZE)
 
@@ -111,26 +134,28 @@ def runVideos(queue, video, name):
     FPS = 1/120
     FPS_MS = int(FPS * 1000)
     while True:
+        cap = caps[sharedPos.value]
         if cap.isOpened():
             ret, img = cap.read()
             if ret:    
-                # cv2.imshow(name, img)
+                cv2.imshow(name, img)
                 n_frame = img.copy()
                 # try:
                 if not queue.empty():
                     # print("got data!")
                     mask = queue.get_nowait()
                     cv2.imshow("masked", mask)
+
                     # blur threshold image
-                    blur = cv2.GaussianBlur(mask, (0,0), sigmaX=4, sigmaY=4, borderType = cv2.BORDER_DEFAULT)
+                    blur = cv2.GaussianBlur(mask, (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
                     # stretch so that 255 -> 255 and 127.5 -> 0
                     # C = A*X+B
                     # 255 = A*255+B
                     # 0 = A*127.5+B
                     # Thus A=2 and B=-127.5
                     #aa = a*2.0-255.0 does not work correctly, so use skimage
-                    # result = skimage.exposure.rescale_intensity(blur, in_range=(127.5,255), out_range=(0,255))
-                    cv2.imshow("blurmasked", blur)
+                    result = skimage.exposure.rescale_intensity(blur, in_range=(127.5,255), out_range=(0,255))
+                    cv2.imshow("blurmasked", result)
                 
                 # except Exception as e:
                 #     print("could not get mask data!\n" + str(e))
@@ -153,10 +178,21 @@ if __name__ == '__main__':
 
     q = Queue()
 
+    global sharedPos
+    # create a integer value
+    sharedPos = Value('i', 0)
+    
     videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4']
 
-    detectionProcess = Process(target=instanceSegmentor, args=(q,))
+    vidLen = len(videos)
+
+    detectionProcess = Process(target=instanceSegmentor, args=(q,), name="Detection Process")
     detectionProcess.start() 
 
-    backgroundProcess = Process(target=runVideos, args=(q, videos[1], str(videos[1])))
+    backgroundProcess = Process(target=runVideos, args=(q, videos, "background", sharedPos), name="Background Video Process")
     backgroundProcess.start()
+
+    #keyboard listening thread
+    listener = keyboard.Listener(
+        on_press=on_press)
+    listener.start()
