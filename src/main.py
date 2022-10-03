@@ -1,3 +1,5 @@
+from ast import arg
+from keyword import iskeyword
 from multiprocessing import Queue, Value, Process
 
 # from subprocess import CREATE_NEW_CONSOLE
@@ -6,6 +8,7 @@ from multiprocessing import Queue, Value, Process
 import cv2
 import time
 import skimage.exposure
+import argparse
 
 from pynput import keyboard 
 
@@ -16,6 +19,32 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 from utils import *
+
+import serial
+
+# Initialize parser
+parser = argparse.ArgumentParser()
+ 
+# Adding optional argument
+parser.add_argument("-c", "--Control", help = "keyboard/arduino", required=True)
+parser.add_argument("-b", "--Baudrate", help = "define baud rate if using Arduino to control")
+# Read arguments from command line
+args = vars(parser.parse_args())
+arduino = serial.Serial()
+baudrate = 9600
+isKeyboard = False
+if args["Control"] == 'arduino' and args["Baudrate"] != None:
+    try:
+        baudrate = args["Baudrate"]
+        arduino = serial.Serial(port='COM4', baudrate=baudrate, timeout=.1)
+    except Exception as e: 
+        print(e)
+        exit()        
+elif args["Control"] == 'keyboard':
+    isKeyboard = True
+else:    
+    print("Baurd rate not passed!")
+    exit()
 
 ogDim = (1280, 720)
 predDim = (640, 360)
@@ -178,7 +207,6 @@ if __name__ == '__main__':
 
     q = Queue()
 
-    global sharedPos
     # create a integer value
     sharedPos = Value('i', 0)
     
@@ -192,7 +220,8 @@ if __name__ == '__main__':
     backgroundProcess = Process(target=runVideos, args=(q, videos, "background", sharedPos), name="Background Video Process")
     backgroundProcess.start()
 
-    #keyboard listening thread
-    listener = keyboard.Listener(
-        on_press=on_press)
-    listener.start()
+    if isKeyboard:
+        #keyboard listening thread
+        listener = keyboard.Listener(
+            on_press=on_press)
+        listener.start()
