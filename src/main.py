@@ -1,26 +1,14 @@
-from ast import arg
-from keyword import iskeyword
-from multiprocessing import Queue, Value, Process
-
-# from subprocess import CREATE_NEW_CONSOLE
-# from torch.multiprocessing import Pool, Process, set_start_method
-
 import cv2
 import time
 import skimage.exposure
 import argparse
-
-from pynput import keyboard 
-
-import numpy as np
-
-# from PIL import Image as im
-# import PIL.Image
-
-import matplotlib.pyplot as plt
-from utils import *
-
 import serial
+import numpy as np
+import matplotlib.pyplot as plt
+
+from multiprocessing import Queue, Value, Process
+from pynput import keyboard 
+from utils import *
 
 # Initialize parser
 parser = argparse.ArgumentParser()
@@ -28,11 +16,20 @@ parser = argparse.ArgumentParser()
 # Adding optional argument
 parser.add_argument("-c", "--Control", help = "keyboard/arduino", required=True)
 parser.add_argument("-b", "--Baudrate", help = "define baud rate if using Arduino to control")
+parser.add_argument("-d", "--Debug", help="use this to view masked data")
+
 # Read arguments from command line
 args = vars(parser.parse_args())
 arduino = serial.Serial()
 baudrate = 9600
 isKeyboard = False
+isDebuging = False
+
+#defining background frame size
+ogDim = (1280, 720)
+predDim = (640, 360)
+vidLen = 0
+
 if args["Control"] == 'arduino' and args["Baudrate"] != None:
     try:
         baudrate = args["Baudrate"]
@@ -45,11 +42,6 @@ elif args["Control"] == 'keyboard':
 else:    
     print("Baurd rate not passed!")
     exit()
-
-ogDim = (1280, 720)
-predDim = (640, 360)
-
-vidLen = 0
 
 def on_press(key):
     try:
@@ -65,9 +57,9 @@ def changeBackgroundVideo():
     sharedPos.value += 1
     if sharedPos.value >= vidLen:
         sharedPos.value = 0
-    print(sharedPos.value)
+    # print(sharedPos.value)
 
-def instanceSegmentor(queue):
+def instanceSegmentor(frameQueue, maskQueue):
     global ogDim
     global predDim
     
@@ -82,14 +74,11 @@ def instanceSegmentor(queue):
     capture.set(cv2.CAP_PROP_FRAME_HEIGHT, ogDim[1])
     capture.set(cv2.CAP_PROP_FRAME_WIDTH, ogDim[0])
     capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
-    print("Properties Set! Starting Webcam!")
+    print("Properties Set! Starting Webcam!") 
 
-    # cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
-    # cv2.namedWindow("raw", cv2.WINDOW_AUTOSIZE)
-    cv2.namedWindow("cutout", cv2.WINDOW_AUTOSIZE)
-
-    # time.sleep(2)
-    
+    if(isDebuging):
+        cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
+        cv2.namedWindow("cutout", cv2.WINDOW_AUTOSIZE)    
     # FPS = 1/X, X = desired FPS
     # FPS = 1/120
     # FPS_MS = int(FPS * 1000) #in milli seconds (use if required)
@@ -104,11 +93,13 @@ def instanceSegmentor(queue):
                 # Using cv2.flip() method
                 # Use Flip code 0 to flip vertically
                 frame = cv2.flip(frame, 1)
-                ogFrame = frame.copy()
+                originalFrame = frame.copy()
 
                 # width, height, channels = frame.shape
                 # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 # frame = cv2.cvtColor(cv2.resize(frame, (640,360), interpolation=cv2.INTER_NEAREST), cv2.COLOR_BGR2RGB)
+
+                #reducing the captured frame image size for quick prediction
                 labels = utils.get_pred(cv2.resize(frame, (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST), model)
                 
                 mask = labels == 15
@@ -120,21 +111,28 @@ def instanceSegmentor(queue):
                 
                 mask[mask!=1] = 0
                 mask[mask==1] = 255
-                mask = cv2.GaussianBlur(mask, (0,0), sigmaX=4, sigmaY=4, borderType = cv2.BORDER_DEFAULT)
+                mask = cv2.GaussianBlur(cv2.resize(mask, ogDim), (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
                 mask = skimage.exposure.rescale_intensity(mask, in_range=(127.5,255), out_range=(0,255))
+                
+                originalFrame[mask==0] = 0
+
+                if(isDebuging):
+                    cv2.imshow("mask", mask)
+                    cv2.imshow("cutout", originalFrame) 
 
                 try:
-                    queue.put_nowait(mask)
+                    # maskQueue.put_nowait(mask)
+                    frameQueue.put_nowait(originalFrame)
                     # print("data Sent!")
                 except:
-                    print("Could not send mask data!")
+                    print("Could not send frame and mask data!")
 
-                n_frame = cv2.resize(frame.copy(), (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST)
-                n_frame[mask==0] = 0
+                # n_frame = cv2.resize(frame.copy(), (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST)
+                # n_frame[mask==0] = 0
                 # mask = np.repeat(mask[:, :, np.newaxis], 3, axis = 2)
                 # mask = labels.astype(np.uint8) #* 1.0
                 # cv2.imshow("raw", frame)
-                cv2.imshow("cutout", n_frame)
+                # cv2.imshow("cutout", n_frame)
                 # cv2.imshow("mask", mask)
             else:
                 break
@@ -147,7 +145,7 @@ def instanceSegmentor(queue):
     capture.release()
     cv2.destroyAllWindows()
 
-def runVideos(queue, videos, name, sharedPos):
+def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
     global ogDim
     global predDim
 
@@ -155,8 +153,8 @@ def runVideos(queue, videos, name, sharedPos):
 
     for i in range(len(videos)):
         caps.append(cv2.VideoCapture(videos[i]))
-    cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
-    cv2.namedWindow("blurmasked", cv2.WINDOW_AUTOSIZE)
+    # cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
+    # cv2.namedWindow("blurmasked", cv2.WINDOW_AUTOSIZE)
     cv2.namedWindow("masked", cv2.WINDOW_AUTOSIZE)
 
     # FPS = 1/X, X = desired FPS
@@ -165,26 +163,32 @@ def runVideos(queue, videos, name, sharedPos):
     while True:
         cap = caps[sharedPos.value]
         if cap.isOpened():
-            ret, img = cap.read()
+            ret, backgroundImg = cap.read()
             if ret:    
-                cv2.imshow(name, img)
-                n_frame = img.copy()
-                # try:
-                if not queue.empty():
+                # if not maskQueue.empty() and not frameQueue.empty():
+                if not frameQueue.empty():
                     # print("got data!")
-                    mask = queue.get_nowait()
-                    cv2.imshow("masked", mask)
+                    backgroundImg = cv2.resize(backgroundImg, ogDim)
+                    maskImage = frameQueue.get_nowait()
+                    print("mask shape is: " + str(maskImage.shape))
+                    print("background shape is: " + str(backgroundImg.shape))
+
+                    maskImage[maskImage[:,:,0]==0] = backgroundImg
+                    maskImage[maskImage[:,:,1]==0] = backgroundImg
+                    maskImage[maskImage[:,:,2]==0] = backgroundImg
+
+                    cv2.imshow("masked", maskImage)
 
                     # blur threshold image
-                    blur = cv2.GaussianBlur(mask, (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
+                    # blur = cv2.GaussianBlur(maskImage, (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
                     # stretch so that 255 -> 255 and 127.5 -> 0
                     # C = A*X+B
                     # 255 = A*255+B
                     # 0 = A*127.5+B
                     # Thus A=2 and B=-127.5
                     #aa = a*2.0-255.0 does not work correctly, so use skimage
-                    result = skimage.exposure.rescale_intensity(blur, in_range=(127.5,255), out_range=(0,255))
-                    cv2.imshow("blurmasked", result)
+                    # result = skimage.exposure.rescale_intensity(blur, in_range=(127.5,255), out_range=(0,255))
+                    # cv2.imshow("blurmasked", result)
                 
                 # except Exception as e:
                 #     print("could not get mask data!\n" + str(e))
@@ -205,8 +209,8 @@ def runVideos(queue, videos, name, sharedPos):
 
 if __name__ == '__main__':
 
-    q = Queue()
-
+    frameQ = Queue()
+    maskQ = Queue() 
     # create a integer value
     sharedPos = Value('i', 0)
     
@@ -214,10 +218,10 @@ if __name__ == '__main__':
 
     vidLen = len(videos)
 
-    detectionProcess = Process(target=instanceSegmentor, args=(q,), name="Detection Process")
+    detectionProcess = Process(target=instanceSegmentor, args=(frameQ, maskQ,), name="Detection Process")
     detectionProcess.start() 
 
-    backgroundProcess = Process(target=runVideos, args=(q, videos, "background", sharedPos), name="Background Video Process")
+    backgroundProcess = Process(target=runVideos, args=(frameQ, maskQ, videos, "background", sharedPos), name="Background Video Process")
     backgroundProcess.start()
 
     if isKeyboard:
