@@ -1,3 +1,4 @@
+from turtle import back
 import cv2
 import time
 import skimage.exposure
@@ -42,6 +43,12 @@ elif args["Control"] == 'keyboard':
 else:    
     print("Baurd rate not passed!")
     exit()
+
+if args["Debug"] == "true":
+    isDebuging = True
+else:
+    isDebuging = False
+
 
 def on_press(key):
     try:
@@ -173,10 +180,29 @@ def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
                     print("mask shape is: " + str(maskImage.shape))
                     print("background shape is: " + str(backgroundImg.shape))
 
-                    maskImage[maskImage[:,:,0]==0] = backgroundImg
-                    maskImage[maskImage[:,:,1]==0] = backgroundImg
-                    maskImage[maskImage[:,:,2]==0] = backgroundImg
+                    # get (i, j) positions of all RGB pixels that are black (i.e. [0, 0, 0])
+                    black_pixels = np.where(
+                        (maskImage[:, :, 0] == 0) & 
+                        (maskImage[:, :, 1] == 0) & 
+                        (maskImage[:, :, 2] == 0)
+                    )
+                    # print( black_pixels )
+                    # set those pixels to white
+                    # backgroundImg[black_pixels][0] = maskImage[:,:,0]
+                    # index0 = [ (black_pixels[0][i],black_pixels[1][i],0) for i in range(len(black_pixels[0])) ]
+                    # index1 = [ (black_pixels[0][i],black_pixels[1][i],1) for i in range(len(black_pixels[0])) ]
+                    # index2 = [ (black_pixels[0][i],black_pixels[1][i],2) for i in range(len(black_pixels[0])) ]
+                    # print(maskImage[ (683, 901) ])
+                    # print(type(index0), len(index0))
+                    # exit()
 
+                    # print( black_pixels[0], black_pixels[1] )
+                    # exit()
+                    # assert maskImage.shape == (720, 1280, 3) and backgroundImg.shape == (720, 1280, 3)
+                    # print( maskImage[index0].shape, backgroundImg[index0].shape )
+                    # assert maskImage[index0].shape == (0,3) and backgroundImg[index0].shape == (0,3)
+                    # maskImage[index0] = backgroundImg[index0]
+                    # maskImage[maskImage[:,:,0] == 0 and maskImage[:,:,1] == 0 and maskImage[:,:,2] == 0] = backgroundImg
                     cv2.imshow("masked", maskImage)
 
                     # blur threshold image
