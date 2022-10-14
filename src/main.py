@@ -88,7 +88,7 @@ def instanceSegmentor(frameQueue, maskQueue):
         cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
         cv2.namedWindow("cutout", cv2.WINDOW_AUTOSIZE)    
     # FPS = 1/X, X = desired FPS
-    # FPS = 1/120
+    FPS = 1/24
     # FPS_MS = int(FPS * 1000) #in milli seconds (use if required)
 
     while True:
@@ -119,10 +119,12 @@ def instanceSegmentor(frameQueue, maskQueue):
                 
                 mask[mask!=1] = 0
                 mask[mask==1] = 255
-                mask = cv2.GaussianBlur(cv2.resize(mask, ogDim), (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
-                mask = skimage.exposure.rescale_intensity(mask, in_range=(127.5,255), out_range=(0,255))
                 
-                originalFrame[mask==0] = 0
+                # mask = cv2.resize(mask, ogDim)
+                mask = cv2.GaussianBlur(cv2.resize(mask, ogDim), (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
+                mask = skimage.exposure.rescale_intensity(mask, in_range=(127.5,255), out_range=(255, 0))
+                
+                originalFrame[mask==255] = 255
 
                 if(isDebuging):
                     cv2.imshow("mask", mask)
@@ -135,18 +137,11 @@ def instanceSegmentor(frameQueue, maskQueue):
                 except:
                     print("Could not send frame and mask data!")
 
-                # n_frame = cv2.resize(frame.copy(), (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST)
-                # n_frame[mask==0] = 0
-                # mask = np.repeat(mask[:, :, np.newaxis], 3, axis = 2)
-                # mask = labels.astype(np.uint8) #* 1.0
-                # cv2.imshow("raw", frame)
-                # cv2.imshow("cutout", n_frame)
-                # cv2.imshow("mask", mask)
             else:
                 break
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-            # time.sleep(FPS)
+            time.sleep(FPS)
     
     # Empty the cache and switch off the interactive mode
     torch.cuda.empty_cache()
@@ -161,76 +156,25 @@ def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
 
     for i in range(len(videos)):
         caps.append(cv2.VideoCapture(videos[i]))
-    # cv2.namedWindow(name, cv2.WINDOW_AUTOSIZE)
-    # cv2.namedWindow("blurmasked", cv2.WINDOW_AUTOSIZE)
     cv2.namedWindow("masked", cv2.WINDOW_AUTOSIZE)
 
     # FPS = 1/X, X = desired FPS
-    FPS = 1/120
+    FPS = 1/30
     FPS_MS = int(FPS * 1000)
     while True:
         cap = caps[sharedPos.value]
         if cap.isOpened():
             ret, backgroundImg = cap.read()
             if ret:    
-                # if not maskQueue.empty() and not frameQueue.empty():
                 if not frameQueue.empty():
                     # print("got data!")
                     backgroundImg = cv2.resize(backgroundImg, ogDim)
                     maskImage = frameQueue.get_nowait()
-                    # print("mask shape is: " + str(maskImage.shape))
-                    # print("background shape is: " + str(backgroundImg.shape))
-                    # print(np.unique((maskImage), return_counts=True))
-                    # exit()
-                    # get (i, j) positions of all RGB pixels that are black (i.e. [0, 0, 0])
-                    # black_pixels = np.where(
-                    #     (maskImage[:, :, 0] == 0) & 
-                    #     (maskImage[:, :, 1] == 0) & 
-                    #     (maskImage[:, :, 2] == 0)
-                    # )
-                    # print( black_pixels )
-                    # set those pixels to white
-                    # backgroundImg[black_pixels][0] = maskImage[:,:,0]
-                    # index0 = [ (black_pixels[0][i],black_pixels[1][i],0) for i in range(len(black_pixels[0])) ]
-                    # index1 = [ (black_pixels[0][i],black_pixels[1][i],1) for i in range(len(black_pixels[0])) ]
-                    # index2 = [ (black_pixels[0][i],black_pixels[1][i],2) for i in range(len(black_pixels[0])) ]
-                    # print(maskImage[ (683, 901) ])
-                    # print(type(index0), len(index0))
-                    # exit()
-
-                    # print( black_pixels[0], black_pixels[1] )
-                    # exit()
-                    # assert maskImage.shape == (720, 1280, 3) and backgroundImg.shape == (720, 1280, 3)
-                    # print( maskImage[index0].shape, backgroundImg[index0].shape )
-                    # assert maskImage[index0].shape == (0,3) and backgroundImg[index0].shape == (0,3)
-                    # maskImage[index0] = backgroundImg[index0]
-                    # maskImage[maskImage[:,:,0] == 0 and maskImage[:,:,1] == 0 and maskImage[:,:,2] == 0] = backgroundImg
-
-                    backgroundImg[maskImage != 0] = maskImage[maskImage != 0]
+                    
+                    backgroundImg[maskImage != 255] = maskImage[maskImage != 255]
 
                     cv2.imshow("masked", backgroundImg)
 
-                    # blur threshold image
-                    # blur = cv2.GaussianBlur(maskImage, (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
-                    # stretch so that 255 -> 255 and 127.5 -> 0
-                    # C = A*X+B
-                    # 255 = A*255+B
-                    # 0 = A*127.5+B
-                    # Thus A=2 and B=-127.5
-                    #aa = a*2.0-255.0 does not work correctly, so use skimage
-                    # result = skimage.exposure.rescale_intensity(blur, in_range=(127.5,255), out_range=(0,255))
-                    # cv2.imshow("blurmasked", result)
-                
-                # except Exception as e:
-                #     print("could not get mask data!\n" + str(e))
-                # mask = cv2.resize(pipeData[0], (1920,1080), interpolation=cv2.INTER_NEAREST)
-                # ogImg = pipeData[1]
-                # print("Background Shape is: " + str(n_frame.shape))
-                # print("Original Frame Shape is: " + str(ogImg.shape))
-                # print("Mask Shape is: " + str(mask.shape)) 
-                # n_frame[mask!=0] = ogImg           
-
-                # cv2.imshow("masked", n_frame)
             else:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -254,6 +198,9 @@ if __name__ == '__main__':
 
     backgroundProcess = Process(target=runVideos, args=(frameQ, maskQ, videos, "background", sharedPos), name="Background Video Process")
     backgroundProcess.start()
+    
+    print ("Image Segmentation PID is: " + str(detectionProcess.pid))
+    print ("Background Video Process is: " + str(backgroundProcess.pid))
 
     if isKeyboard:
         #keyboard listening thread
