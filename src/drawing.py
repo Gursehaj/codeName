@@ -1,4 +1,5 @@
 import cv2
+
 background = cv2.resize(cv2.imread("../face.jpg"), (1280,720), interpolation= cv2.INTER_NEAREST)
 top = cv2.resize(cv2.imread("../test.jpg", -1), (300,300), interpolation= cv2.INTER_NEAREST)
 cv2.rectangle(background,(0,0),(510,510),(0,255,0),3)
