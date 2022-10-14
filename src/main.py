@@ -1,3 +1,4 @@
+from itertools import count
 from turtle import back
 import cv2
 import time
@@ -177,15 +178,16 @@ def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
                     # print("got data!")
                     backgroundImg = cv2.resize(backgroundImg, ogDim)
                     maskImage = frameQueue.get_nowait()
-                    print("mask shape is: " + str(maskImage.shape))
-                    print("background shape is: " + str(backgroundImg.shape))
-
+                    # print("mask shape is: " + str(maskImage.shape))
+                    # print("background shape is: " + str(backgroundImg.shape))
+                    # print(np.unique((maskImage), return_counts=True))
+                    # exit()
                     # get (i, j) positions of all RGB pixels that are black (i.e. [0, 0, 0])
-                    black_pixels = np.where(
-                        (maskImage[:, :, 0] == 0) & 
-                        (maskImage[:, :, 1] == 0) & 
-                        (maskImage[:, :, 2] == 0)
-                    )
+                    # black_pixels = np.where(
+                    #     (maskImage[:, :, 0] == 0) & 
+                    #     (maskImage[:, :, 1] == 0) & 
+                    #     (maskImage[:, :, 2] == 0)
+                    # )
                     # print( black_pixels )
                     # set those pixels to white
                     # backgroundImg[black_pixels][0] = maskImage[:,:,0]
@@ -203,7 +205,10 @@ def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
                     # assert maskImage[index0].shape == (0,3) and backgroundImg[index0].shape == (0,3)
                     # maskImage[index0] = backgroundImg[index0]
                     # maskImage[maskImage[:,:,0] == 0 and maskImage[:,:,1] == 0 and maskImage[:,:,2] == 0] = backgroundImg
-                    cv2.imshow("masked", maskImage)
+
+                    backgroundImg[maskImage != 0] = maskImage[maskImage != 0]
+
+                    cv2.imshow("masked", backgroundImg)
 
                     # blur threshold image
                     # blur = cv2.GaussianBlur(maskImage, (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
