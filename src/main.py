@@ -28,7 +28,7 @@ isKeyboard = False
 isDebuging = False
 
 #defining background frame size
-ogDim = (1280, 720)
+ogDim = (1920, 1080)
 predDim = (640, 360)
 vidLen = 0
 
@@ -88,7 +88,7 @@ def instanceSegmentor(frameQueue, maskQueue):
         cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
         cv2.namedWindow("cutout", cv2.WINDOW_AUTOSIZE)    
     # FPS = 1/X, X = desired FPS
-    FPS = 1/24
+    FPS = 1/30
     # FPS_MS = int(FPS * 1000) #in milli seconds (use if required)
 
     while True:
@@ -141,7 +141,7 @@ def instanceSegmentor(frameQueue, maskQueue):
                 break
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-            time.sleep(FPS)
+            # time.sleep(FPS)
     
     # Empty the cache and switch off the interactive mode
     torch.cuda.empty_cache()
@@ -156,10 +156,12 @@ def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
 
     for i in range(len(videos)):
         caps.append(cv2.VideoCapture(videos[i]))
-    cv2.namedWindow("masked", cv2.WINDOW_AUTOSIZE)
+    cv2.namedWindow("masked", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty("masked", cv2.WND_PROP_FULLSCREEN , cv2.WINDOW_FULLSCREEN)
+    # cv2.setWindowProperty("masked", cv2.WND_PROP_ASPECT_RATIO, cv2.WINDOW_KEEPRATIO)
 
     # FPS = 1/X, X = desired FPS
-    FPS = 1/30
+    FPS = 1/60
     FPS_MS = int(FPS * 1000)
     while True:
         cap = caps[sharedPos.value]
@@ -189,7 +191,7 @@ if __name__ == '__main__':
     # create a integer value
     sharedPos = Value('i', 0)
     
-    videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4']
+    videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4', '../backgroundVideos/3.mp4']
 
     vidLen = len(videos)
 
