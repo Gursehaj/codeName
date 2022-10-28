@@ -1,5 +1,5 @@
 # large video files
-backgroundVideos/*
+backgroundVideos/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

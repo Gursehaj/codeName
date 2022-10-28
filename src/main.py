@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from multiprocessing import Queue, Value, Process
 from pynput import keyboard 
 from utils import *
+from drawing import *
 
 # Initialize parser
 parser = argparse.ArgumentParser()
@@ -79,16 +80,19 @@ def instanceSegmentor(frameQueue, maskQueue):
     capture = cv2.VideoCapture(0) 
     print("Camera loaded!")
     print("Setting camera properties")
-    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, ogDim[1])
-    capture.set(cv2.CAP_PROP_FRAME_WIDTH, ogDim[0])
+    # capture.set(cv2.CAP_PROP_FRAME_HEIGHT, predDim[1])
+    # capture.set(cv2.CAP_PROP_FRAME_WIDTH, predDim[0])
     capture.set(cv2.CAP_PROP_BUFFERSIZE, 2)
     print("Properties Set! Starting Webcam!") 
 
     if(isDebuging):
         cv2.namedWindow("mask", cv2.WINDOW_AUTOSIZE)
         cv2.namedWindow("cutout", cv2.WINDOW_AUTOSIZE)    
+
+    _, f = capture.read()
+    print(f.shape)
     # FPS = 1/X, X = desired FPS
-    FPS = 1/30
+    FPS = 1/24
     # FPS_MS = int(FPS * 1000) #in milli seconds (use if required)
 
     while True:
@@ -108,7 +112,8 @@ def instanceSegmentor(frameQueue, maskQueue):
                 # frame = cv2.cvtColor(cv2.resize(frame, (640,360), interpolation=cv2.INTER_NEAREST), cv2.COLOR_BGR2RGB)
 
                 #reducing the captured frame image size for quick prediction
-                labels = utils.get_pred(cv2.resize(frame, (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST), model)
+                #frame = cv2.resize(frame, (predDim[0], predDim[1]), interpolation=cv2.INTER_NEAREST)
+                labels = utils.get_pred(frame, model)
                 
                 mask = labels == 15
                 # The PASCAL VOC dataset has 20 categories of which Person is the 16th category
@@ -121,10 +126,12 @@ def instanceSegmentor(frameQueue, maskQueue):
                 mask[mask==1] = 255
                 
                 # mask = cv2.resize(mask, ogDim)
-                mask = cv2.GaussianBlur(cv2.resize(mask, ogDim), (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
+                mask = cv2.GaussianBlur(mask, (0,0), sigmaX=3, sigmaY=3, borderType = cv2.BORDER_DEFAULT)
                 mask = skimage.exposure.rescale_intensity(mask, in_range=(127.5,255), out_range=(255, 0))
                 
                 originalFrame[mask==255] = 255
+
+                # originalFrame = scaleFrame.scaleDown(originalFrame, 50)
 
                 if(isDebuging):
                     cv2.imshow("mask", mask)
@@ -151,7 +158,8 @@ def instanceSegmentor(frameQueue, maskQueue):
 def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
     global ogDim
     global predDim
-
+    left = 600
+    top = 500
     caps = []
 
     for i in range(len(videos)):
@@ -170,10 +178,18 @@ def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
             if ret:    
                 if not frameQueue.empty():
                     # print("got data!")
-                    backgroundImg = cv2.resize(backgroundImg, ogDim)
+                    # backgroundImg = cv2.resize(backgroundImg, ogDim)
                     maskImage = frameQueue.get_nowait()
                     
-                    backgroundImg[maskImage != 255] = maskImage[maskImage != 255]
+                    # backgroundImg[maskImage != 255] = maskImage[maskImage != 255]
+                    
+                    # backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left] = maskImage
+                    # 
+                    back = backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left]
+
+                    back[maskImage != 255] = maskImage[maskImage != 255]
+                    backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left]= back
+                    # backgroundImg[backgroundImg == 255] = backgroundImg[backgroundImg != 255]
 
                     cv2.imshow("masked", backgroundImg)
 
@@ -191,7 +207,7 @@ if __name__ == '__main__':
     # create a integer value
     sharedPos = Value('i', 0)
     
-    videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4', '../backgroundVideos/3.mp4']
+    videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4']
 
     vidLen = len(videos)
 

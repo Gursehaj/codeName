@@ -1,22 +1,17 @@
 import cv2
+import numpy as np
 
-background = cv2.resize(cv2.imread("../face.jpg"), (1280,720), interpolation= cv2.INTER_NEAREST)
-top = cv2.resize(cv2.imread("../test.jpg", -1), (300,300), interpolation= cv2.INTER_NEAREST)
-cv2.rectangle(background,(0,0),(510,510),(0,255,0),3)
+class scaleFrame:
+    @staticmethod
+    def scaleDown(frame, scaleVal):
+        scale_percent = scaleVal # percent of original size
+        width = int(frame.shape[1] * scale_percent / 100)
+        height = int(frame.shape[0] * scale_percent / 100)
+        dim = (width, height)
 
-x_offset=y_offset=50
+        # resize image
+        resized = cv2.resize(frame, dim, interpolation = cv2.INTER_AREA)
+        return resized
 
-y1, y2 = y_offset, y_offset + top.shape[0]
-x1, x2 = x_offset, x_offset + top.shape[1]
-
-alpha_s = top[:, :, 2] / 255.0
-alpha_l = 1.0 - alpha_s
-
-for c in range(0, 2):
-    background[y1:y2, x1:x2, c] = (alpha_s * top[:, :, c] + alpha_l * top[y1:y2, x1:x2, c])
-
-# x_offset=y_offset=50
-# top
-# background[y_offset:y_offset+top.shape[0], x_offset:x_offset+top.shape[1],:] = top
-cv2.imshow("img",background)
-cv2.waitKey(0)
+    # @staticmethod
+    # def addPadding(frame, x, y):
