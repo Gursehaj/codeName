@@ -159,7 +159,7 @@ def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
     global ogDim
     global predDim
     left = 600
-    top = 500
+    top = 400
     caps = []
 
     for i in range(len(videos)):
@@ -207,7 +207,7 @@ if __name__ == '__main__':
     # create a integer value
     sharedPos = Value('i', 0)
     
-    videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.mp4']
+    videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.MOV']
 
     vidLen = len(videos)
 
