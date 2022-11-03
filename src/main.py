@@ -9,7 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from multiprocessing import Queue, Value, Process
-from pynput import keyboard 
+from pynput import keyboard
+from torch import true_divide 
 from utils import *
 from drawing import *
 
@@ -52,23 +53,32 @@ else:
     isDebuging = False
 
 
-def on_press(key):
-    try:
-        if (key == key.up):
-            changeBackgroundVideo()
-    except AttributeError:
-        print('special key {0} pressed'.format(
-            key))
+# def on_press(key):
+#     global experience
+#     try:
+#         if (key == key.enter):
+#             experience = True
+#     except AttributeError:
+#         print('special key {0} pressed'.format(
+#             key))
 
-def changeBackgroundVideo():
-    global sharedPos
-    global vidLen
-    sharedPos.value += 1
-    if sharedPos.value >= vidLen:
-        sharedPos.value = 0
-    # print(sharedPos.value)
+# def on_press(key):
+#     try:
+#         if (key == key.enter):
+#             changeBackgroundVideo()
+#     except AttributeError:
+#         print('special key {0} pressed'.format(
+#             key))
 
-def instanceSegmentor(frameQueue, maskQueue):
+# def changeBackgroundVideo():
+#     global sharedPos
+#     global vidLen
+#     sharedPos.value += 1
+#     if sharedPos.value >= vidLen:
+#         sharedPos.value = 0
+#     # print(sharedPos.value)
+
+def instanceSegmentor(frameQueue, maskQueue, waitForFrame):
     global ogDim
     global predDim
     
@@ -92,7 +102,7 @@ def instanceSegmentor(frameQueue, maskQueue):
     _, f = capture.read()
     print(f.shape)
     # FPS = 1/X, X = desired FPS
-    FPS = 1/24
+    FPS = 1/60
     # FPS_MS = int(FPS * 1000) #in milli seconds (use if required)
 
     while True:
@@ -139,8 +149,9 @@ def instanceSegmentor(frameQueue, maskQueue):
 
                 try:
                     # maskQueue.put_nowait(mask)
-                    frameQueue.put_nowait(originalFrame)
-                    # print("data Sent!")
+                    if (waitForFrame.value):
+                        frameQueue.put_nowait(originalFrame)
+                        # print("data Sent!")
                 except:
                     print("Could not send frame and mask data!")
 
@@ -155,9 +166,10 @@ def instanceSegmentor(frameQueue, maskQueue):
     capture.release()
     cv2.destroyAllWindows()
 
-def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
+def runVideos(frameQueue, maskQueue, videos, name, sharedPos, waitForFrame):
     global ogDim
     global predDim
+    experience = False
     left = 600
     top = 400
     caps = []
@@ -171,33 +183,70 @@ def runVideos(frameQueue, maskQueue, videos, name, sharedPos):
     # FPS = 1/X, X = desired FPS
     FPS = 1/60
     FPS_MS = int(FPS * 1000)
-    while True:
-        cap = caps[sharedPos.value]
-        if cap.isOpened():
-            ret, backgroundImg = cap.read()
-            if ret:    
-                if not frameQueue.empty():
-                    # print("got data!")
-                    # backgroundImg = cv2.resize(backgroundImg, ogDim)
-                    maskImage = frameQueue.get_nowait()
-                    
-                    # backgroundImg[maskImage != 255] = maskImage[maskImage != 255]
-                    
-                    # backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left] = maskImage
-                    # 
-                    back = backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left]
+    welcomeImg = cv2.imread('../Jhatka Board.png')
+    lakeOld = cv2.imread("../1.png")
+    cityOld = cv2.imread("../2.png")
+    lakeOldCheck = False
+    lakeNewCheck = False
+    cityNewCheck = False
+    cityOldCheck = False
+    while True:            
+        if (not experience):
+            cv2.imshow("masked", welcomeImg)
+            if cv2.waitKey(1) & 0xFF == ord('\r'):
+                experience = True
+                lakeOldCheck = True
+        else:
+            if (lakeOldCheck):
+                cv2.imshow("masked",lakeOld)
+                cv2.waitKey(3000)
+                lakeOldCheck = False
+                lakeNewCheck = True
 
-                    back[maskImage != 255] = maskImage[maskImage != 255]
-                    backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left]= back
-                    # backgroundImg[backgroundImg == 255] = backgroundImg[backgroundImg != 255]
+            if (cityOldCheck):
+                cv2.imshow("masked",cityOld)
+                cv2.waitKey(3000)
+                cityOldCheck = False
+                cityNewCheck = True
 
-                    cv2.imshow("masked", backgroundImg)
+            if(lakeNewCheck or cityNewCheck):
+                waitForFrame.value = True
+                if(lakeNewCheck):
+                    cap = caps[0]
+                elif(cityNewCheck):
+                    cap = caps[1]
+                if cap.isOpened():
+                    ret, backgroundImg = cap.read()
+                    if ret:    
+                        if not frameQueue.empty():
+                            # print("got data!")
+                            # backgroundImg = cv2.resize(backgroundImg, ogDim)
+                            maskImage = frameQueue.get_nowait()
 
-            else:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-            time.sleep(FPS)
+                            # backgroundImg[maskImage != 255] = maskImage[maskImage != 255]
+
+                            # backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left] = maskImage
+                            # 
+                            back = backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left]
+
+                            back[maskImage != 255] = maskImage[maskImage != 255]
+                            backgroundImg[top:maskImage.shape[0]+top,left:maskImage.shape[1]+left]= back
+                            # backgroundImg[backgroundImg == 255] = backgroundImg[backgroundImg != 255]
+
+                            cv2.imshow("masked", backgroundImg)
+
+                    else:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        if(lakeNewCheck):
+                            cityOldCheck = True
+                            lakeNewCheck = False
+                            lakeOldCheck = False
+                            waitForFrame.value = False
+                        elif (cityNewCheck):
+                            lakeOldCheck = cityOldCheck = lakeNewCheck = cityNewCheck = experience = waitForFrame.value = False
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+                    time.sleep(FPS)
     cap.release()
 
 if __name__ == '__main__':
@@ -206,22 +255,22 @@ if __name__ == '__main__':
     maskQ = Queue() 
     # create a integer value
     sharedPos = Value('i', 0)
-    
-    videos = ['../backgroundVideos/1.mp4', '../backgroundVideos/2.MOV']
+    waitForFrame = Value('i', False)
+    videos = ['../backgroundVideos/1.MOV', '../backgroundVideos/2.MOV']
 
     vidLen = len(videos)
 
-    detectionProcess = Process(target=instanceSegmentor, args=(frameQ, maskQ,), name="Detection Process")
+    detectionProcess = Process(target=instanceSegmentor, args=(frameQ, maskQ, waitForFrame,), name="Detection Process")
     detectionProcess.start() 
 
-    backgroundProcess = Process(target=runVideos, args=(frameQ, maskQ, videos, "background", sharedPos), name="Background Video Process")
+    backgroundProcess = Process(target=runVideos, args=(frameQ, maskQ, videos, "background", sharedPos, waitForFrame,), name="Background Video Process")
     backgroundProcess.start()
     
     print ("Image Segmentation PID is: " + str(detectionProcess.pid))
     print ("Background Video Process is: " + str(backgroundProcess.pid))
 
-    if isKeyboard:
-        #keyboard listening thread
-        listener = keyboard.Listener(
-            on_press=on_press)
-        listener.start()
+    # if isKeyboard:
+    #     #keyboard listening thread
+    #     listener = keyboard.Listener(
+    #         on_press=on_press)
+    #     listener.start()
